@@ -34,7 +34,6 @@ def make_A(N):
             A[:,(N**2-1)-k] = a[j:j+N,i:i+N].flatten()
             k+=1
     return A
-
     
 
 
