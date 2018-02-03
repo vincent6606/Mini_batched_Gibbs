@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as manimation
-from scipy.misc import factorial
 from scipy import sparse
 import io
 import time
@@ -10,9 +9,23 @@ cmap = colors.ListedColormap(['black', 'white'])
 np.random.seed(2017)
 import scipy.stats as st
 import tqdm
-# import threading
 import multiprocessing
 from multiprocessing import Queue
+import argparse
+
+
+
+parser = argparse.ArgumentParser(description='Potts model Simulation')
+parser.add_argument('--size', default=50, type=int,
+                    help='size of graph(NxN)')
+
+parser.add_argument('--epoch', default=1000000, type=int,
+                    help='number of epochs to run')
+
+
+
+
+
 
 
 def gkern(kernlen=21, nsig=5):
@@ -234,7 +247,7 @@ if __name__ == "__main__":
             break
 
     print(marginals)
-    with open('Ising_Indep_{}_{}.csv'.format(100,1e3),'wb') as f:
+    with open('Ising_Indep_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
         for i in marginals:
             np.savetxt(f, i,delimiter=',')
 
