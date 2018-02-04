@@ -101,7 +101,7 @@ class IsingLattice(multiprocessing.Process):
             is supported 
         """
 
-        np.random.seed(2017)
+        # np.random.seed(2017)
         if initial_state == 'r':
             # system = np.random.randint(0, 2, self.sqr_size)
             # system[system==0] = -1
@@ -114,7 +114,7 @@ class IsingLattice(multiprocessing.Process):
         print("system. ",self.magnetization)
         # print(system)
         
-    def _energy(self, N, M,m):
+    def _energy(self, N, M):
         """Calculate the energy of spin interaction at a given lattice site
         i.e. the interaction of a Spin at lattice site n,m with its 4 neighbors
         - S_n,m*(S_n+1,m + Sn-1,m + S_n,m-1, + S_n,m+1)
@@ -125,10 +125,7 @@ class IsingLattice(multiprocessing.Process):
         Return
         """
     
-
-        W = (m*self.A[:,[self.size*N+M]].reshape(1,-1))
-        # print('scale',(self.size**2/np.sum(m)))
-        eu = (self.size**2/np.sum(m))*np.dot((self.system.flatten()),(W.T)*self.system[(N),(M)])
+        eu = np.dot((self.system.flatten()),self.A[:,[self.size*N+M]]*self.system[(N),(M)])
         return eu
 
 
@@ -181,11 +178,8 @@ class IsingLattice(multiprocessing.Process):
 
             # Calculate energy of a flipped spin
             # same estimator for both Ex and Ey
-            m = np.random.rand(1,self.size**2)
-            m[m<self.sp]=0
-            m[m>=self.sp]=1
             # current energy
-            Ex = self._energy(N,M,m)
+            Ex = self._energy(N,M)
             #flip the state
             p = 1/(1+np.exp(-2*Ex/self.T))
 
@@ -254,7 +248,7 @@ if __name__ == "__main__":
             break
 
     # print(marginals)
-    with open('MINT_Ising_Dep_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
+    with open('Gibbs_Ising_Dep_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
         for i in marginals:
             np.savetxt(f, i,delimiter=',')
 

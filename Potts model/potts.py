@@ -10,7 +10,7 @@ import multiprocessing
 import csv
 from multiprocessing import Queue
 import argparse
-np.random.seed(2012)
+# np.random.seed(2012)
 import scipy.stats as st
 
 
@@ -100,7 +100,7 @@ class PottsLattice(multiprocessing.Process):
             currently only random ("r") initial state, or uniformly magnetized, 
             is supported 
         """
-        np.random.seed(2017)
+        # np.random.seed(2017)
         if initial_state == 'r':
             system = np.ones(self.sqr_size, dtype=int)
             # system = np.random.randint(1,11,self.sqr_size,dtype=int)
@@ -241,10 +241,10 @@ class PottsLattice(multiprocessing.Process):
                 # reject
                 self.system[N, M] = curr
             # hack to record errors for 200 iterations
-            if epoch>=(self._EPOCHS-self.points):
-                self.calc_marginals()
-                error = self.compute_error(epoch)
-                self.errors.append(error)
+            
+            self.calc_marginals()
+            error = self.compute_error(epoch)
+            self.errors.append(error)
    
 
         print("...done")
@@ -275,7 +275,7 @@ if __name__ == "__main__":
     q = multiprocessing.Manager().Queue()
 
 
-    factors = [2,5,20]
+    factors = [2,10,30,50,80]
     for i in (factors):
         p = PottsLattice(q, inv_tempature=11,lam = (i), states = args.states,epoch =args.epoch, initial_state="r", size=(args.size, args.size))
         p.start()
