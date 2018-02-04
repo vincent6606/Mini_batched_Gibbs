@@ -52,9 +52,9 @@ def make_A(N):
 
 class IsingLattice(multiprocessing.Process):
 
-    _EPOCHS = int(1e5)
+    
 
-    def __init__(self, q,inv_tempature=5, initial_state='r', size=(100,100), sp=0.5,show=False):
+    def __init__(self, q,epoch,inv_tempature=5,initial_state='r', size=(100,100), sp=0.5,show=False):
         # threading.Thread.__init__(self)
         super(IsingLattice, self).__init__()
         self.sqr_size = size
@@ -69,8 +69,8 @@ class IsingLattice(multiprocessing.Process):
         self.sp = sp
 
         self.errors = []
-     
-        self.points = self._EPOCHS
+        self._EPOCHS = epoch
+        self.points = epoch
         
     
         self.D = 2
@@ -101,8 +101,9 @@ class IsingLattice(multiprocessing.Process):
 
         np.random.seed(2017)
         if initial_state == 'r':
-            system = np.random.randint(0, 2, self.sqr_size)
-            system[system==0] = -1
+            # system = np.random.randint(0, 2, self.sqr_size)
+            # system[system==0] = -1
+            system = np.ones(self.sqr_size)
         else:
             system = np.ones(self.sqr_size)
         
@@ -111,7 +112,7 @@ class IsingLattice(multiprocessing.Process):
         print("system. ",self.magnetization)
         # print(system)
         
-    def _energy(self, N, M):
+    def _energy(self, N, M,m):
         """Calculate the energy of spin interaction at a given lattice site
         i.e. the interaction of a Spin at lattice site n,m with its 4 neighbors
         - S_n,m*(S_n+1,m + Sn-1,m + S_n,m-1, + S_n,m+1)
@@ -121,13 +122,12 @@ class IsingLattice(multiprocessing.Process):
         M (int) : lattice site coordinate
         Return
         """
-        
-        m = np.random.rand(1,self.size**2)
-        m[m<self.sp]=0
-        m[m>=self.sp]=1
+    
 
         W = (m*self.A[:,[self.size*N+M]].reshape(1,-1))
-        return np.dot((self.system.flatten()),(W.T)*self.system[(N),(M)])
+        # print('scale',(self.size**2/np.sum(m)))
+        eu = (self.size**2/np.sum(m))*np.dot((self.system.flatten()),(W.T)*self.system[(N),(M)])
+        return eu
 
 
     @property
@@ -147,8 +147,9 @@ class IsingLattice(multiprocessing.Process):
         # i goes from 0 to D-1
         # counts the number of times state d occurs 
         for i in range(self.D):
-            self.marginals[i]+=self.system==self.states[i]
 
+            self.marginals[i]+=self.system==self.states[i]
+            # print(marginals)
     def compute_error(self,epoch):
  
         # frequency of each state 
@@ -177,18 +178,19 @@ class IsingLattice(multiprocessing.Process):
             N, M = np.random.randint(0, self.size, 2)
 
             # Calculate energy of a flipped spin
-
-
+            # same estimator for both Ex and Ey
+            m = np.random.rand(1,self.size**2)
+            m[m<self.sp]=0
+            m[m>=self.sp]=1
             # current energy
-            Ex = self._energy(N,M)
+            Ex = self._energy(N,M,m)
             #flip the state
-            self.system[N,M]*=-1
-            Ey = self._energy(N,M)
+            p = 1/(1+np.exp(-2*Ex*self.T))
 
-
+            # print(p)
 
            # Using Gibbs sampling
-            p = np.exp(Ey*self.T)/(np.exp(Ex*self.T)+np.exp(Ey*self.T))
+            # p = np.exp(Ey*self.T)/(np.exp(Ex*self.T)+np.exp(Ey*self.T))
 
             if np.random.random() <= p:
                 # if likely, accept the change
@@ -204,7 +206,7 @@ class IsingLattice(multiprocessing.Process):
                 error = self.compute_error(epoch)
                 self.errors.append(error)
         
-        print(str(self.sp)+" Net Magnetization: {:.2f}".format(self.magnetization))
+        # print(str(self.sp)+" Net Magnetization: {:.2f}".format(self.magnetization))
 
 
         print('final error: ',self.errors[-1])
@@ -213,13 +215,16 @@ class IsingLattice(multiprocessing.Process):
 
 if __name__ == "__main__":
 
-
+    # variable to store the errors from marginals
+    global args
+    args = parser.parse_args()
     marginals = []
 
     tasks = []
     q = multiprocessing.Manager().Queue()
-    for i in range(3):
-        tasks.append(IsingLattice(q,inv_tempature=11, initial_state="r", size=(50,50),sp=float(i)/20))
+    sparsity = [0.1,0.3,0.6]
+    for i in sparsity:
+        tasks.append(IsingLattice(q,epoch=args.epoch,inv_tempature=11, initial_state="r", size=(args.size,args.size),sp=float(i)))
 
 
     for task in tasks:
@@ -233,10 +238,10 @@ if __name__ == "__main__":
         for task in tasks:
             task.terminate()
             task.join()
-        print "Keyboard interrupt in main"
+        print("Keyboard interrupt in main")
    
     finally:
-        print "Cleaning up Main"
+        print("Cleaning up Main")
 
     while q:
         try:
@@ -246,8 +251,8 @@ if __name__ == "__main__":
         except :
             break
 
-    print(marginals)
-    with open('Ising_Indep_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
+    # print(marginals)
+    with open('Ising_Dep_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
         for i in marginals:
             np.savetxt(f, i,delimiter=',')
 
