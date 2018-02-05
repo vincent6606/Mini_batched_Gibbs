@@ -168,6 +168,9 @@ class PottsLattice(multiprocessing.Process):
         # print('mean',np.mean((np.linalg.norm(y_bar,axis=0))))
         return np.mean((np.linalg.norm(y_bar,axis=0)))
 
+    def softmax(self,x):
+        e_x = np.exp(x - np.max(x))
+        return e_x / e_x.sum()
 
     def run(self, video=True):
 
@@ -199,14 +202,15 @@ class PottsLattice(multiprocessing.Process):
             for state in self.states:
                 energies[0, state-1] = self._energy(N, M, state, s)
 
+            
+
+
+
             # calculate the transition probabilities from the exponentials
-            energies -= np.max(energies)
-            energies = np.exp(energies)
-            sum_ez = np.sum(energies)
-            transition = energies/sum_ez
+            transition = self.softmax(energies)
 
             # choose a state based on energy probabilities
-            # out put is (1 to 10)
+            # output is (1 to 10)
             ez = np.random.choice(range(1, self.D+1),
                                   1, p=np.squeeze(transition))
             ez = ez[0]
@@ -215,7 +219,7 @@ class PottsLattice(multiprocessing.Process):
 #                 print('trans',transition)
 
             # most probable ernergy
-            (energy_y) = np.exp(energies[0, ez-1])
+            (energy_y) = (energies[0, ez-1])
 #                 print(energy_y)
 
             # current energy

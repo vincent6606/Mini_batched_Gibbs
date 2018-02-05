@@ -188,6 +188,7 @@ class IsingLattice(multiprocessing.Process):
             Ex = self._energy(N,M,m)
             #flip the state
             p = 1/(1+np.exp(-2*Ex/self.T))
+            # print('p',p)
 
             # print(p)
 
@@ -254,7 +255,7 @@ if __name__ == "__main__":
             break
 
     # print(marginals)
-    with open('MINT_Ising_Dep_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
+    with open('LocalMINT_Ising_Dep_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
         for i in marginals:
             np.savetxt(f, i,delimiter=',')
 
