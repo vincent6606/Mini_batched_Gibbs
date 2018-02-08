@@ -50,12 +50,12 @@ class PottsLattice(multiprocessing.Process):
 
     
 
-    def __init__(self,q, inv_tempature,states, epoch=1e6,initial_state='r', size=(100, 100), show=False):
+    def __init__(self,q, temp,states, epoch=1e6,initial_state='r', size=(100, 100), show=False):
         super(PottsLattice, self).__init__()
 
         self.sqr_size = size
         self.size = size[0]
-        self.T = inv_tempature
+        self.T = temp
         self._build_system(initial_state)
 
         # marginals
@@ -117,17 +117,11 @@ class PottsLattice(multiprocessing.Process):
         mask = self.system.flatten() == state
         phi = self.A[:,self.size*N+M]*mask
         # print(np.sum(phi))
-        return np.sum(phi)
+        return np.sum(phi)/self.T
 
 
 
-    # @profile
-    def full_energy(self, N, M, state):
-        mask = self.system.flatten() == state
-        A = self.A[:, self.size*N+M]
-        A = mask*A
-        energy = np.dot(mask, A)
-        return energy
+
 
     # @property
     def internal_energy(self):
@@ -160,12 +154,12 @@ class PottsLattice(multiprocessing.Process):
         # norm of the distance away from true distribution
         # print('mean',np.mean((np.linalg.norm(y_bar,axis=0))))
         return np.mean((np.linalg.norm(y_bar,axis=0)))
-
+    
+    def softmax(self,x):
+        e_x = np.exp(x - np.max(x))
+        return e_x / e_x.sum()
 
     def run(self, video=True):
-
-
-        
         """Run the simulation
         """
 
@@ -184,7 +178,6 @@ class PottsLattice(multiprocessing.Process):
             curr = self.system[N, M]
 
             # calculate energy of each state
-            A = self.A[:, self.size*N+M]
             energies = np.zeros((1, len(self.states)))
     
 
@@ -193,10 +186,8 @@ class PottsLattice(multiprocessing.Process):
                 energies[0, state-1] = self._energy(N, M, state)
 
             # calculate the transition probabilities from the exponentials
-            energies -= np.max(energies)
-            energies = np.exp(energies)
-            sum_ez = np.sum(energies)
-            transition = energies/sum_ez
+
+            transition = self.softmax(energies)
 
             # choose a state based on energy probabilities
             # out put is (1 to 10)
@@ -238,9 +229,9 @@ if __name__ == "__main__":
     tasks = []
     q = multiprocessing.Manager().Queue()
 
-
-    for i in range(4):
-        p = PottsLattice(q,inv_tempature=11, states = args.states,epoch =args.epoch, initial_state="r", size=(args.size,args.size))
+    # temperatures = [0.2,0.6,0.8,1,2]
+    for i in range(1):
+        p = PottsLattice(q,temp=0.15, states = args.states,epoch =args.epoch, initial_state="r", size=(args.size,args.size))
         p.start()
         print('start')
         tasks.append(p)
@@ -271,6 +262,10 @@ if __name__ == "__main__":
         except :
             break
     print(errors[-1])
+
+    # with open('VaryTemp_Gibbs_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
+    #     for i in errors:
+    #         np.savetxt(f, i,delimiter=',')
 
     with open('Gibbs_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
         for i in errors:

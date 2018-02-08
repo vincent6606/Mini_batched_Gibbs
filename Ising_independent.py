@@ -26,8 +26,6 @@ parser.add_argument('--epoch', default=1000000, type=int,
 
 
 
-
-
 def gkern(kernlen=21, nsig=5):
     """Returns a 2D Gaussian kernel array."""
 
@@ -105,7 +103,7 @@ class IsingLattice(multiprocessing.Process):
         if initial_state == 'r':
             # system = np.random.randint(0, 2, self.sqr_size)
             # system[system==0] = -1
-            system = np.ones(self.sqr_size)
+            system = np.ones(self.sqr_size,dtype=int)
         else:
             system = np.ones(self.sqr_size)
         
@@ -114,7 +112,7 @@ class IsingLattice(multiprocessing.Process):
         print("system. ",self.magnetization)
         # print(system)
         
-    def _energy(self, N, M,m):
+    def _energy(self, N, M, m):
         """Calculate the energy of spin interaction at a given lattice site
         i.e. the interaction of a Spin at lattice site n,m with its 4 neighbors
         - S_n,m*(S_n+1,m + Sn-1,m + S_n,m-1, + S_n,m+1)
@@ -213,7 +211,7 @@ class IsingLattice(multiprocessing.Process):
 
 
         print('final error: ',self.errors[-1])
-        self.q.put([[self.sp]+self.errors])
+        self.q.put([[(1-self.sp)*self.size**2]+self.errors])
         return True
 
 if __name__ == "__main__":
@@ -225,9 +223,10 @@ if __name__ == "__main__":
 
     tasks = []
     q = multiprocessing.Manager().Queue()
-    sparsity = [0.1,0.3,0.6]
+    sparsity = [0.05,0.4,0.9]
+    # temperatures = [0.1,0.5,1,5,10]
     for i in sparsity:
-        tasks.append(IsingLattice(q,epoch=args.epoch,temp=20, initial_state="r", size=(args.size,args.size),sp=float(i)))
+        tasks.append(IsingLattice(q,epoch=args.epoch,temp=0.7, initial_state="r", size=(args.size,args.size),sp=float(i)))
 
 
     for task in tasks:
@@ -254,8 +253,7 @@ if __name__ == "__main__":
         except :
             break
 
-    # print(marginals)
-    with open('LocalMINT_Ising_Dep_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
+    with open('LocalMINT_Ising_Dep_varyTemp_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
         for i in marginals:
             np.savetxt(f, i,delimiter=',')
 

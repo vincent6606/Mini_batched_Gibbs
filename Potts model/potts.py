@@ -53,12 +53,12 @@ class PottsLattice(multiprocessing.Process):
 
     
 
-    def __init__(self,q, inv_tempature, lam,states, epoch=1e6,initial_state='r', size=(100, 100), show=False):
+    def __init__(self,q, temp, lam,states, epoch=1e6,initial_state='r', size=(100, 100), show=False):
         super(PottsLattice, self).__init__()
 
         self.sqr_size = size
         self.size = size[0]
-        self.T = inv_tempature
+        self.T = temp
         self._build_system(initial_state)
 
         # marginals
@@ -71,7 +71,7 @@ class PottsLattice(multiprocessing.Process):
         self.L = self.A.sum(axis=0).max()
         # factor of lambda
         
-        self.lam = lam*(self.L**2)
+        self.lam = int(lam*(self.L**2))
 
 
 
@@ -124,7 +124,7 @@ class PottsLattice(multiprocessing.Process):
         mask = self.system.flatten() == state
         eu = (self.L/self.lam)*np.dot(s,mask)
         # print(eu)
-        return eu
+        return eu/self.T
 
 
 
@@ -134,7 +134,7 @@ class PottsLattice(multiprocessing.Process):
         A = self.A[:, self.size*N+M]
         A = mask*A
         energy = np.dot(mask, A)
-        return energy
+        return energy/self.T
 
     # @property
     def internal_energy(self):
@@ -202,9 +202,6 @@ class PottsLattice(multiprocessing.Process):
             for state in self.states:
                 energies[0, state-1] = self._energy(N, M, state, s)
 
-            
-
-
 
             # calculate the transition probabilities from the exponentials
             transition = self.softmax(energies)
@@ -257,14 +254,7 @@ class PottsLattice(multiprocessing.Process):
         
         print('final error: ',self.errors[-1])
         self.q.put([[self.lam]+self.errors])
-        # print(self.q)
 
-
-
-
-
-        # with open('errors1.csv','wb') as f:
-        #     np.savetxt(f, [[self.lam]+self.errors],delimiter=',')
         return True
 
 
@@ -279,9 +269,10 @@ if __name__ == "__main__":
     q = multiprocessing.Manager().Queue()
 
 
-    factors = [2,10,30,50,80]
+    factors = [2,40,80,100,150]
+    # temperatures = [0.2,0.6,0.8,1,2]
     for i in (factors):
-        p = PottsLattice(q, inv_tempature=11,lam = (i), states = args.states,epoch =args.epoch, initial_state="r", size=(args.size, args.size))
+        p = PottsLattice(q, temp=0.15, lam =(i), states = args.states,epoch =args.epoch, initial_state="r", size=(args.size, args.size))
         p.start()
         print('start')
         tasks.append(p)
@@ -311,7 +302,12 @@ if __name__ == "__main__":
             errors.append(item)
         except :
             break
-    print(errors[-1])
+    
+
+    # with open('VaryTemp_MGPMH_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
+    #     for i in errors:
+    #         np.savetxt(f, i,delimiter=',')
+
 
     with open('MGPMH_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
         for i in errors:

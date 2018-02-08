@@ -185,8 +185,6 @@ class IsingLattice(multiprocessing.Process):
 
             # print(p)
 
-           # Using Gibbs sampling
-            # p = np.exp(Ey*self.T)/(np.exp(Ex*self.T)+np.exp(Ey*self.T))
 
             if np.random.random() <= p:
                 # if likely, accept the change
@@ -220,7 +218,7 @@ if __name__ == "__main__":
     q = multiprocessing.Manager().Queue()
     sparsity = [0.1,0.3,0.6]
     for i in sparsity:
-        tasks.append(IsingLattice(q,epoch=args.epoch,temp=20, initial_state="r", size=(args.size,args.size),sp=float(i)))
+        tasks.append(IsingLattice(q,epoch=args.epoch,temp=0.5, initial_state="r", size=(args.size,args.size),sp=float(i)))
 
 
     for task in tasks:
