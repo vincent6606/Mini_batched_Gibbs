@@ -101,11 +101,11 @@ class IsingLattice(multiprocessing.Process):
             is supported 
         """
 
-        # np.random.seed(2017)
+        np.random.seed(2017)
         if initial_state == 'r':
             # system = np.random.randint(0, 2, self.sqr_size)
             # system[system==0] = -1
-            system = np.ones(self.sqr_size)
+            system = np.ones(self.sqr_size,dtype=int)
         else:
             system = np.ones(self.sqr_size)
         
@@ -204,7 +204,7 @@ class IsingLattice(multiprocessing.Process):
 
 
         print('final error: ',self.errors[-1])
-        self.q.put([[self.sp]+self.errors])
+        self.q.put([[self.T]+self.errors])
         return True
 
 if __name__ == "__main__":
@@ -216,9 +216,9 @@ if __name__ == "__main__":
 
     tasks = []
     q = multiprocessing.Manager().Queue()
-    sparsity = [0.1,0.3,0.6]
-    for i in sparsity:
-        tasks.append(IsingLattice(q,epoch=args.epoch,temp=0.5, initial_state="r", size=(args.size,args.size),sp=float(i)))
+    temps = [18]
+    for i in temps:
+        tasks.append(IsingLattice(q,epoch=args.epoch,temp=i, initial_state="r", size=(args.size,args.size),sp=0))
 
 
     for task in tasks:
@@ -245,7 +245,7 @@ if __name__ == "__main__":
         except :
             break
 
-    # print(marginals)
+    
     with open('Gibbs_Ising_Dep_{}_{}.csv'.format(args.size,args.epoch),'wb') as f:
         for i in marginals:
             np.savetxt(f, i,delimiter=',')

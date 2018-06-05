@@ -48,9 +48,7 @@ def make_A(N):
 
 class PottsLattice(multiprocessing.Process):
 
-    
-
-    def __init__(self,q, temp,states, epoch=1e6,initial_state='r', size=(100, 100), show=False):
+    def __init__(self, q, temp, states, epoch=1e6, initial_state='r', size=(100, 100), show=False):
         super(PottsLattice, self).__init__()
 
         self.sqr_size = size
@@ -67,16 +65,14 @@ class PottsLattice(multiprocessing.Process):
         # L is the maximum sum of factors
         self.L = self.A.sum(axis=0).max()
 
-
-        # true distribution 
-        self.true = np.ones((self.D, self.sqr_size[0],self.sqr_size[0]))/self.D
+        # true distribution
+        self.true = np.ones(
+            (self.D, self.sqr_size[0], self.sqr_size[0]))/self.D
         self.q = q
         self.errors = []
         self._EPOCHS = epoch
         self.points = epoch
-        self.marginals = np.zeros((self.D,self.sqr_size[0],self.sqr_size[0]))
-
-
+        self.marginals = np.zeros((self.D, self.sqr_size[0], self.sqr_size[0]))
 
     def create_A(self):
         # create mask
@@ -99,7 +95,6 @@ class PottsLattice(multiprocessing.Process):
             # system = np.random.randint(1,11,self.sqr_size,dtype=int)
         else:
             system = np.ones(self.sqr_size)
-
         self.system = system
 
         # print(system)
@@ -113,49 +108,35 @@ class PottsLattice(multiprocessing.Process):
         M (int) : lattice site coordinate
         Return
         """
-        # get phi(x), which depends on the state at X[N,M] and all its neighbors
+        # get phi(x) which depends on the state at X[N,M] and all its neighbors
         mask = self.system.flatten() == state
-        phi = self.A[:,self.size*N+M]*mask
-        # print(np.sum(phi))
+        phi = self.A[:, self.size*N+M]*mask
         return np.sum(phi)/self.T
 
-
-
-
-
-    # @property
-    def internal_energy(self):
-        return -4*self.system.flatten().dot((self.A).dot(self.system.flatten()))
-
-    # @property
-    def magnetization(self):
-        """Find the overall magnetization of the system
-        """
-        return np.abs(np.sum(self.system)/self.size**2)
     # @profile
     def calc_marginals(self):
         # marginals is a DxNxN tensor
         # i goes from 0 to D-1
-        # counts the number of times state d occurs 
+        # counts the number of times state d occurs
         for i in range(self.D):
-            self.marginals[i]+=self.system==self.states[i]
+            self.marginals[i] += self.system == self.states[i]
 
-    def compute_error(self,epoch):
- 
-        # frequency of each state 
+    def compute_error(self, epoch):
+
+        # frequency of each state
         # print('de',((epoch-(self._EPOCHS-self.points)+1)))
         # print('raw counts',self.marginals)
         y_bar = self.marginals/((epoch-(self._EPOCHS-self.points)+1))
         # print('frequency',y_bar)
 
         y_bar -= self.true
-        y_bar = y_bar.reshape(self.D,-1)
+        y_bar = y_bar.reshape(self.D, -1)
         # print('yb',y_bar)
         # norm of the distance away from true distribution
         # print('mean',np.mean((np.linalg.norm(y_bar,axis=0))))
-        return np.mean((np.linalg.norm(y_bar,axis=0)))
-    
-    def softmax(self,x):
+        return np.mean((np.linalg.norm(y_bar, axis=0)))
+
+    def softmax(self, x):
         e_x = np.exp(x - np.max(x))
         return e_x / e_x.sum()
 
@@ -163,14 +144,8 @@ class PottsLattice(multiprocessing.Process):
         """Run the simulation
         """
 
-        # FFMpegWriter = manimation.writers['ffmpeg']
-        # writer = FFMpegWriter(fps=10)
-
-        # plt.ion()
-        # fig = plt.figure()
-
         # with writer.saving(fig, "Potts_mini.mp4", 100):
-        for epoch in tqdm.trange(self._EPOCHS,desc='Gibbs step'):
+        for epoch in tqdm.trange(self._EPOCHS, desc='Gibbs step'):
             # Randomly select a site on the lattice
 
             N, M = np.random.randint(0, self.size, 2)
@@ -179,8 +154,6 @@ class PottsLattice(multiprocessing.Process):
 
             # calculate energy of each state
             energies = np.zeros((1, len(self.states)))
-    
-
 
             for state in self.states:
                 energies[0, state-1] = self._energy(N, M, state)
@@ -194,25 +167,18 @@ class PottsLattice(multiprocessing.Process):
             ez = np.random.choice(range(1, self.D+1),
                                   1, p=np.squeeze(transition))
             ez = ez[0]
-#                 print(np.squeeze(transition))
-#                 print('ez',ez)
-#                 print('trans',transition)
+
 
             self.system[N, M] = ez
 
-
             # hack to record errors for 200 iterations
-            if epoch>=(self._EPOCHS-self.points):
+            if epoch >= (self._EPOCHS-self.points):
                 self.calc_marginals()
                 error = self.compute_error(epoch)
                 self.errors.append(error)
-   
 
         print("...done")
 
-        # plt.close('all')
-        
-        print('final error: ',self.errors[-1])
         self.q.put([self.errors])
         # print(self.q)
 
@@ -231,18 +197,19 @@ if __name__ == "__main__":
 
     # temperatures = [0.2,0.6,0.8,1,2]
     for i in range(1):
-        p = PottsLattice(q,temp=0.15, states = args.states,epoch =args.epoch, initial_state="r", size=(args.size,args.size))
+        p = PottsLattice(q, temp=0.15, states=args.states, epoch=args.epoch,
+                         initial_state="r", size=(args.size, args.size))
         p.start()
         print('start')
         tasks.append(p)
-    
+
     print('one')
 
     try:
         for task in tasks:
             print('two')
             task.join()
-    # handle keyboard interrupts to avoid un-closed processes 
+    # handle keyboard interrupts to avoid un-closed processes
         print('three')
     except KeyboardInterrupt:
         for task in tasks:
@@ -253,20 +220,15 @@ if __name__ == "__main__":
     finally:
         print("Cleaning up Main")
 
-
     while q:
         try:
 
             item = q.get(block=False)
             errors.append(item)
-        except :
+        except:
             break
-    print(errors[-1])
 
-    # with open('VaryTemp_Gibbs_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
-    #     for i in errors:
-    #         np.savetxt(f, i,delimiter=',')
 
-    with open('Gibbs_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
+    with open('Gibbs_errors_{}_{}_{}.csv'.format(args.states, args.size, args.epoch), 'wb') as f:
         for i in errors:
-            np.savetxt(f, i,delimiter=',')
+            np.savetxt(f, i, delimiter=',')

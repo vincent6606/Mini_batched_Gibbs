@@ -99,7 +99,7 @@ class IsingLattice(multiprocessing.Process):
             is supported 
         """
 
-        np.random.seed(2017)
+        # np.random.seed(2017)
         if initial_state == 'r':
             # system = np.random.randint(0, 2, self.sqr_size)
             # system[system==0] = -1
@@ -122,11 +122,11 @@ class IsingLattice(multiprocessing.Process):
         M (int) : lattice site coordinate
         Return
         """
-    
-
+        # print('ss',np.sum(m))
         W = (m*self.A[:,[self.size*N+M]].reshape(1,-1))
-        # print('scale',(self.size**2/np.sum(m)))
-        eu = (self.size**2/np.sum(m))*np.dot((self.system.flatten()),(W.T)*self.system[(N),(M)])
+        scale = (self.size**2)/np.sum(m)
+        # print(scale)
+        eu = scale*np.dot((self.system.flatten()),(W.T)*self.system[(N),(M)])
         return eu
 
 
@@ -135,11 +135,7 @@ class IsingLattice(multiprocessing.Process):
         """Find the overall magnetization of the system
         """
         print(np.sum(self.system),self.size**2 )
-        
         return np.abs(float(np.sum(self.system))/self.size**2)
-
-
-
 
 
     def calc_marginals(self):
@@ -186,12 +182,9 @@ class IsingLattice(multiprocessing.Process):
             Ex = self._energy(N,M,m)
             #flip the state
             p = 1/(1+np.exp(-2*Ex/self.T))
-            # print('p',p)
-
-            # print(p)
 
            # Using Gibbs sampling
-            # p = np.exp(Ey*self.T)/(np.exp(Ex*self.T)+np.exp(Ey*self.T))
+            # print(p)
 
             if np.random.random() <= p:
                 # if likely, accept the change
@@ -201,13 +194,10 @@ class IsingLattice(multiprocessing.Process):
                 self.system[N,M] *=-1 
 
             #marginals
-            # hack to record errors for 200 iterations
             
             self.calc_marginals()
             error = self.compute_error(epoch)
             self.errors.append(error)
-        
-        # print(str(self.sp)+" Net Magnetization: {:.2f}".format(self.magnetization))
 
 
         print('final error: ',self.errors[-1])
@@ -223,10 +213,11 @@ if __name__ == "__main__":
 
     tasks = []
     q = multiprocessing.Manager().Queue()
-    sparsity = [0.05,0.4,0.9]
-    # temperatures = [0.1,0.5,1,5,10]
-    for i in sparsity:
-        tasks.append(IsingLattice(q,epoch=args.epoch,temp=0.7, initial_state="r", size=(args.size,args.size),sp=float(i)))
+
+    # temps = [0.3,5,8,20]
+    B = [0.9,0.8,0.7,0.6,0.1]
+    for i in B:
+        tasks.append(IsingLattice(q,epoch=args.epoch,temp=18, initial_state="r", size=(args.size,args.size),sp=i))
 
 
     for task in tasks:
@@ -248,7 +239,6 @@ if __name__ == "__main__":
     while q:
         try:
             item = q.get(block=False)
-            # print(item)
             marginals.append(item)
         except :
             break

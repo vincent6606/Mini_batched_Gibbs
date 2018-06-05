@@ -22,10 +22,10 @@ parser.add_argument('--epoch', default=1e5, type=int,
                     help='number of epochs to run')
 
 parser.add_argument('--lam', default=2, type=int,
-                    help='factor or lamdba')
+                    help='factor or lambda')
 
 parser.add_argument('--states', default=10, type=int,
-                    help='factor or lamdba')
+                    help='factor or lambda')
 
 parser.add_argument('--no_output', default = False, action='store_true')
 
@@ -55,7 +55,7 @@ class PottsLattice(multiprocessing.Process):
 
     
 
-    def __init__(self,q, temp, lam,states, epoch=1e6,initial_state='r', size=(100, 100), show=False):
+    def __init__(self,q, temp, lam1,lam2,states, epoch=1e6,initial_state='r', size=(100, 100), show=False):
         super(PottsLattice, self).__init__()
 
         self.sqr_size = size
@@ -73,9 +73,14 @@ class PottsLattice(multiprocessing.Process):
         self.L = self.A.sum(axis=0).max()
         # factor of lambda
         
-        self.lam = int(lam*(self.L**2))
-
-
+        self.lam1 = int(lam1*(self.L**2))
+        self.psi = np.sum(self.A)
+        self.lam2 = int(lam2*(self.psi**2))
+        # self.lam2 = int(lam2)
+        print(self.lam1)
+        print(self.lam2)
+        print(self.psi,'psi')
+        print(self.L,'L')
 
         # true distribution 
         self.true = np.ones((self.D, self.sqr_size[0],self.sqr_size[0]))/self.D
@@ -124,38 +129,35 @@ class PottsLattice(multiprocessing.Process):
         """
         # get phi(x), which depends on the state at X[N,M] and all its neighbors
         mask = self.system.flatten() == state
-        # print('state_{}'.format(state),np.sum(mask))
-        eu = (self.L/self.lam)*np.dot(s,mask)
+        eu = (self.L/self.lam1)*np.dot(s,mask)
         return eu/self.T
 
 
-
-
-        # mask = self.system.flatten() == state
-        # eu = (self.L/self.lam1)*np.dot(s,mask)
-        # res = np.dot(mask.T,(np.dot(self.A,mask)))/self.T
-
-
-
-
-
     # @profile
-    def full_energy(self, N, M, state):
-        mask = self.system.flatten() == state
-        A = self.A[:, self.size*N+M]
-        A = mask*A
-        energy = np.dot(mask, A)
-        return energy/self.T
+    def full_energy(self):
+        eu = np.log(1+self.psi/(self.lam2))
+        # divide by a factor of two to negate the effects of double counting,
+        # i.e. X_TAX will be twice the energy because Aij == Aji
+        small_lambda = (self.lam2*self.A/(self.T*2))/self.psi
+        big_lambda = small_lambda.sum()
+        p = small_lambda/big_lambda
+        B = np.random.poisson(big_lambda)
+        out = np.random.multinomial(B, p.flatten(),1)
 
-    # @property
-    def internal_energy(self):
-        return -4*self.system.flatten().dot((self.A).dot(self.system.flatten()))
+        e = 0
+        for i in np.nonzero(out[0,:])[0]:
+            x = i // self.size**2
+            y = i % self.size**2
+            if self.system[x // self.size, x % self.size] == self.system[y//self.size,y%self.size]:
+                e += out[0,i]
+        return e*eu
+        # e = 0
+        # for i in range(1,self.D+1):
+        #     X = self.system.flatten() == i
+        #     e +=np.dot(X.T,np.dot(self.A,X))
+        # res = e/self.T
+        # return res
 
-    # @property
-    def magnetization(self):
-        """Find the overall magnetization of the system
-        """
-        return np.abs(np.sum(self.system)/self.size**2)
     # @profile
     def calc_marginals(self):
         # marginals is a DxNxN tensor
@@ -166,14 +168,12 @@ class PottsLattice(multiprocessing.Process):
 
     def compute_error(self,epoch):
  
-        # frequency of each state 
-        y_bar = self.marginals/((epoch+1))
-        # print('frequency',y_bar)
+        y_bar = self.marginals/((epoch-(self._EPOCHS-self.points)+1))
+
 
         y_bar -= self.true
         y_bar = y_bar.reshape(self.D,-1)
 
-        # norm of the distance away from true distribution
         return np.mean((np.linalg.norm(y_bar,axis=0)))
 
     def softmax(self,x):
@@ -181,11 +181,9 @@ class PottsLattice(multiprocessing.Process):
         return e_x / e_x.sum()
 
     def run(self, video=True):
-
-
-        print("batch size: ",str(self.lam))
-        """Run the simulation
-        """
+        # calculate initial energy 
+        full_energy_x = self.full_energy()
+        print("batch size: ",str(self.lam2))
 
         for epoch in tqdm.trange(self._EPOCHS,desc='Gibbs step'):
             # Randomly select a site on the lattice
@@ -197,60 +195,61 @@ class PottsLattice(multiprocessing.Process):
             # calculate energy of each state
             A = self.A[:, self.size*N+M]
             energies = np.zeros((1, len(self.states)))
-            s = np.random.poisson(self.lam*A/(self.L))
+            s = np.random.poisson(self.lam1*A/self.L)
 
-            # calculate the probabilities of switching to every one of the D states
+
             for state in self.states:
                 energies[0, state-1] = self._energy(N, M, state, s)
-            # print(energies)
+
 
             # calculate the transition probabilities from the exponentials
             transition = self.softmax(energies)
 
             # choose a state based on energy probabilities
-            # output is (1 to 10),i.e. state 1 to state 10
-            # this is the Gibbs proposal step of MGPMH
+            # output is (1 to 10)
             ez = np.random.choice(range(1, self.D+1),
-                                  1, p=np.squeeze(transition))
-            ez = ez[0]
+                                  1, p=np.squeeze(transition))[0]
 
             # most probable energy
             (energy_y) = (energies[0, ez-1])
-#                 print(energy_y)
 
             # current energy
             (energy_x) = energies[0, curr-1]
-#                 print(energy_x)
 
-            # full energies
-            (full_energy_x) = self.full_energy(N, M, curr)
-            (full_energy_y) = self.full_energy(N, M, ez)
+            # full energy
+            # change the state at N,M to the proposed state and calculate full energy
+            self.system[N,M] = ez
+            full_energy_y = self.full_energy()
 
-            # if epoch % (self._EPOCHS//75) == 0:
-                # print(full_energy_y, energy_y, full_energy_x, energy_x)
+            #change the state back 
+            self.system[N,M] = curr
+
             a = np.exp(full_energy_y-energy_y-full_energy_x+energy_x)
 
             p = min(a, 1)
-            # print('p',p)
 
+            # print('p',p)
             # if likely, accept
             if np.random.random() <= p:
                 # accept the change
                 self.system[N, M] = ez
+                # replace the old estimate of the energy with the new one
+                full_energy_x = full_energy_y
             else:
                 # reject
                 self.system[N, M] = curr
-                
-            # record the marginals
+            
             self.calc_marginals()
             error = self.compute_error(epoch)
             self.errors.append(error)
    
 
-        print("...done")        
+        print("...done")
         print('final error: ',self.errors[-1])
-        self.q.put([[self.lam]+self.errors])
-
+        self.q.put([[self.lam2]+self.errors])
+        print(self.system)
+        print(self.psi**2)
+        print(self.lam2)
         return True
 
 
@@ -264,11 +263,11 @@ if __name__ == "__main__":
     tasks = []
     q = multiprocessing.Manager().Queue()
 
-
-    factors = [80]
+    print('no output ',args.no_output)
+    factors = [1,2,3,4]
     # temperatures = [0.2,0.6,0.8,1,2]
     for i in (factors):
-        p = PottsLattice(q, temp=0.15, lam =(i), states = args.states,epoch =args.epoch, initial_state="r", size=(args.size, args.size))
+        p = PottsLattice(q, temp=0.15, lam1 = 100, lam2 = i, states = args.states, epoch =args.epoch, initial_state="r", size=(args.size, args.size))
         p.start()
         print('start')
         tasks.append(p)
@@ -279,7 +278,7 @@ if __name__ == "__main__":
         for task in tasks:
             print('two')
             task.join()
-    # handle keyboard interrupts to avoid un-closed processes 
+    # handle keyboard interrupts to avoid unclosed processes 
         print('three')
     except KeyboardInterrupt:
         for task in tasks:
@@ -300,11 +299,7 @@ if __name__ == "__main__":
             break
     
 
-    # with open('VaryTemp_MGPMH_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
-    #     for i in errors:
-    #         np.savetxt(f, i,delimiter=',')
-
     if args.no_output == False:
-        with open('MGPMH_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
+        with open('DoubleMin_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
             for i in errors:
                 np.savetxt(f, i,delimiter=',')

@@ -10,24 +10,19 @@ import multiprocessing
 import csv
 from multiprocessing import Queue
 import argparse
-# np.random.seed(2012)
+np.random.seed(2012)
 import scipy.stats as st
 
 
-parser = argparse.ArgumentParser(description='MGPMH Potts model Simulation')
+parser = argparse.ArgumentParser(description='Potts model Simulation')
 parser.add_argument('--size', default=50, type=int,
                     help='size of graph(NxN)')
 
-parser.add_argument('--epoch', default=1e5, type=int,
+parser.add_argument('--epoch', default=1000000, type=int,
                     help='number of epochs to run')
-
-parser.add_argument('--lam', default=2, type=int,
-                    help='factor or lamdba')
-
 parser.add_argument('--states', default=10, type=int,
-                    help='factor or lamdba')
+                    help='number of states for each variable')
 
-parser.add_argument('--no_output', default = False, action='store_true')
 
 def gkern(kernlen=21, nsig=5):
     """Returns a 2D Gaussian kernel array."""
@@ -55,7 +50,7 @@ class PottsLattice(multiprocessing.Process):
 
     
 
-    def __init__(self,q, temp, lam,states, epoch=1e6,initial_state='r', size=(100, 100), show=False):
+    def __init__(self,q, temp,states, epoch=1e6,initial_state='r', size=(100, 100), show=False):
         super(PottsLattice, self).__init__()
 
         self.sqr_size = size
@@ -71,10 +66,6 @@ class PottsLattice(multiprocessing.Process):
 
         # L is the maximum sum of factors
         self.L = self.A.sum(axis=0).max()
-        # factor of lambda
-        
-        self.lam = int(lam*(self.L**2))
-
 
 
         # true distribution 
@@ -102,7 +93,7 @@ class PottsLattice(multiprocessing.Process):
             currently only random ("r") initial state, or uniformly magnetized, 
             is supported 
         """
-        # np.random.seed(2017)
+        np.random.seed(2017)
         if initial_state == 'r':
             system = np.ones(self.sqr_size, dtype=int)
             # system = np.random.randint(1,11,self.sqr_size,dtype=int)
@@ -113,7 +104,7 @@ class PottsLattice(multiprocessing.Process):
 
         # print(system)
     # @profile
-    def _energy(self, N, M, state, s):
+    def _energy(self, N, M, state):
         """Calculate the energy of spin interaction at a given lattice site for a given state
 
         Args
@@ -124,28 +115,13 @@ class PottsLattice(multiprocessing.Process):
         """
         # get phi(x), which depends on the state at X[N,M] and all its neighbors
         mask = self.system.flatten() == state
-        # print('state_{}'.format(state),np.sum(mask))
-        eu = (self.L/self.lam)*np.dot(s,mask)
-        return eu/self.T
+        phi = self.A[:,self.size*N+M]*mask
+        # print(np.sum(phi))
+        return np.sum(phi)/self.T
 
 
 
 
-        # mask = self.system.flatten() == state
-        # eu = (self.L/self.lam1)*np.dot(s,mask)
-        # res = np.dot(mask.T,(np.dot(self.A,mask)))/self.T
-
-
-
-
-
-    # @profile
-    def full_energy(self, N, M, state):
-        mask = self.system.flatten() == state
-        A = self.A[:, self.size*N+M]
-        A = mask*A
-        energy = np.dot(mask, A)
-        return energy/self.T
 
     # @property
     def internal_energy(self):
@@ -167,26 +143,33 @@ class PottsLattice(multiprocessing.Process):
     def compute_error(self,epoch):
  
         # frequency of each state 
-        y_bar = self.marginals/((epoch+1))
+        # print('de',((epoch-(self._EPOCHS-self.points)+1)))
+        # print('raw counts',self.marginals)
+        y_bar = self.marginals/((epoch-(self._EPOCHS-self.points)+1))
         # print('frequency',y_bar)
 
         y_bar -= self.true
         y_bar = y_bar.reshape(self.D,-1)
-
+        # print('yb',y_bar)
         # norm of the distance away from true distribution
+        # print('mean',np.mean((np.linalg.norm(y_bar,axis=0))))
         return np.mean((np.linalg.norm(y_bar,axis=0)))
-
+    
     def softmax(self,x):
         e_x = np.exp(x - np.max(x))
         return e_x / e_x.sum()
 
     def run(self, video=True):
-
-
-        print("batch size: ",str(self.lam))
         """Run the simulation
         """
 
+        # FFMpegWriter = manimation.writers['ffmpeg']
+        # writer = FFMpegWriter(fps=10)
+
+        # plt.ion()
+        # fig = plt.figure()
+
+        # with writer.saving(fig, "Potts_mini.mp4", 100):
         for epoch in tqdm.trange(self._EPOCHS,desc='Gibbs step'):
             # Randomly select a site on the lattice
 
@@ -195,61 +178,43 @@ class PottsLattice(multiprocessing.Process):
             curr = self.system[N, M]
 
             # calculate energy of each state
-            A = self.A[:, self.size*N+M]
             energies = np.zeros((1, len(self.states)))
-            s = np.random.poisson(self.lam*A/(self.L))
+    
 
-            # calculate the probabilities of switching to every one of the D states
+
             for state in self.states:
-                energies[0, state-1] = self._energy(N, M, state, s)
-            # print(energies)
+                energies[0, state-1] = self._energy(N, M, state)
 
             # calculate the transition probabilities from the exponentials
+
             transition = self.softmax(energies)
 
             # choose a state based on energy probabilities
-            # output is (1 to 10),i.e. state 1 to state 10
-            # this is the Gibbs proposal step of MGPMH
+            # out put is (1 to 10)
             ez = np.random.choice(range(1, self.D+1),
                                   1, p=np.squeeze(transition))
             ez = ez[0]
+#                 print(np.squeeze(transition))
+#                 print('ez',ez)
+#                 print('trans',transition)
 
-            # most probable energy
-            (energy_y) = (energies[0, ez-1])
-#                 print(energy_y)
+            self.system[N, M] = ez
 
-            # current energy
-            (energy_x) = energies[0, curr-1]
-#                 print(energy_x)
 
-            # full energies
-            (full_energy_x) = self.full_energy(N, M, curr)
-            (full_energy_y) = self.full_energy(N, M, ez)
-
-            # if epoch % (self._EPOCHS//75) == 0:
-                # print(full_energy_y, energy_y, full_energy_x, energy_x)
-            a = np.exp(full_energy_y-energy_y-full_energy_x+energy_x)
-
-            p = min(a, 1)
-            # print('p',p)
-
-            # if likely, accept
-            if np.random.random() <= p:
-                # accept the change
-                self.system[N, M] = ez
-            else:
-                # reject
-                self.system[N, M] = curr
-                
-            # record the marginals
-            self.calc_marginals()
-            error = self.compute_error(epoch)
-            self.errors.append(error)
+            # hack to record errors for 200 iterations
+            if epoch>=(self._EPOCHS-self.points):
+                self.calc_marginals()
+                error = self.compute_error(epoch)
+                self.errors.append(error)
    
 
-        print("...done")        
+        print("...done")
+
+        # plt.close('all')
+        
         print('final error: ',self.errors[-1])
-        self.q.put([[self.lam]+self.errors])
+        self.q.put([self.errors])
+        # print(self.q)
 
         return True
 
@@ -264,11 +229,9 @@ if __name__ == "__main__":
     tasks = []
     q = multiprocessing.Manager().Queue()
 
-
-    factors = [80]
     # temperatures = [0.2,0.6,0.8,1,2]
-    for i in (factors):
-        p = PottsLattice(q, temp=0.15, lam =(i), states = args.states,epoch =args.epoch, initial_state="r", size=(args.size, args.size))
+    for i in range(1):
+        p = PottsLattice(q,temp=0.15, states = args.states,epoch =args.epoch, initial_state="r", size=(args.size,args.size))
         p.start()
         print('start')
         tasks.append(p)
@@ -298,13 +261,12 @@ if __name__ == "__main__":
             errors.append(item)
         except :
             break
-    
+    print(errors[-1])
 
-    # with open('VaryTemp_MGPMH_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
+    # with open('VaryTemp_Gibbs_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
     #     for i in errors:
     #         np.savetxt(f, i,delimiter=',')
 
-    if args.no_output == False:
-        with open('MGPMH_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
-            for i in errors:
-                np.savetxt(f, i,delimiter=',')
+    with open('Gibbs_errors_{}_{}_{}.csv'.format(args.states,args.size,args.epoch),'wb') as f:
+        for i in errors:
+            np.savetxt(f, i,delimiter=',')
